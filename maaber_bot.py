@@ -149,23 +149,61 @@ def parse_status_from_text(text: str):
     # Priority 1: Check for emojis
     for emoji_char, status_val in emoji_mapping.items():
         if emoji_char in text:
-            return status_val
+            return {"status": status_val, "sub_status": None, "match": emoji_char}
     
     # Priority 2: Fallback to keywords
     positive_keywords = ["سالك", "سالكة", "تمام", "فاتح", "مفتوح", "بدون", "بحري", "ماشية", "منسوب", "سهل", "خفيف", "لا يوجد", "سلس"]
-    negative_keywords = ["مغلق", "تسكير", "ازمة", "أزمة", "وقوف", "تفتيش", "اغلاق", "ازمه", "واقف", "عجقة", "حادث", "عرقلة", "تأخير"]
-    caution_keywords = ["كثافة سير", "كثافه سير", "جيش", "شرطة", "تواجد", "انسحب", "صافوط", "سريع", "يتحرك", "بطيء", "تجمع", "مشاة", "تفتيش مكثف", "حذر"]
+    negative_keywords = ["مغلق", "تسكير", "اغلاق", "واقف", "وقوف"]
     
+    # New branched structure for caution keywords
+    caution_keywords = {
+        "traffic_jam": {
+            "stopping": ["وقوف تام"],
+            "high": ["ازمة", "ازمه", "كثافة سير", "كثافه سير", "عجقة", "بطيء", "تأخير"],
+            "medium": ["يتحرك", "سريع", "خفيف"]
+        },
+        "police_presence": ["جيش", "شرطة", "تواجد", "تفتيش"],
+        "road_event": ["حادث", "عرقلة", "مشاة", "تجمع"]
+    }
+    
+    # Find best match for all keywords
     pos_match, pos_score = find_status_keyword(text, positive_keywords)
     neg_match, neg_score = find_status_keyword(text, negative_keywords)
-    cau_match, cau_score = find_status_keyword(text, caution_keywords)
+    
+    caution_match = None
+    best_caution_score = 0
+    best_sub_status = None
+    
+    # Check for branched caution keywords and get the best match
+    # Traffic
+    for level, keywords in caution_keywords["traffic_jam"].items():
+        match, score = find_status_keyword(text, keywords)
+        if match and score > best_caution_score:
+            best_caution_score = score
+            best_sub_status = f"traffic_{level}"
+            caution_match = match
 
-    if pos_match and pos_score > max(neg_score, cau_score):
-        return "🟢"
-    if neg_match and neg_score > max(pos_score, cau_score):
-        return "🔴"
-    if cau_match:
-        return "⚠️"
+    # Police presence
+    match, score = find_status_keyword(text, caution_keywords["police_presence"])
+    if match and score > best_caution_score:
+        best_caution_score = score
+        best_sub_status = "police_presence"
+        caution_match = match
+
+    # Road event
+    match, score = find_status_keyword(text, caution_keywords["road_event"])
+    if match and score > best_caution_score:
+        best_caution_score = score
+        best_sub_status = "road_event"
+        caution_match = match
+
+    if pos_match and pos_score > max(neg_score, best_caution_score):
+        return {"status": "🟢", "sub_status": None, "match": pos_match}
+    if neg_match and neg_score > max(pos_score, best_caution_score):
+        return {"status": "🔴", "sub_status": None, "match": neg_match}
+    if best_sub_status:
+        return {"status": "⚠️", "sub_status": best_sub_status, "match": caution_match}
+    
     return None
 
 def find_status_keyword(text: str, keywords: list):
@@ -192,8 +230,8 @@ async def process_message(event):
         return
 
     current_time = get_jerusalem_time()
-    status = parse_status_from_text(text)
-
+    result = parse_status_from_text(text)
+    
     if canonical_name not in status_data:
         status_data[canonical_name] = {}
         if canonical_name not in names:
@@ -201,13 +239,14 @@ async def process_message(event):
 
     status_data[canonical_name]['last_seen_message'] = text
     status_data[canonical_name]['last_seen_timestamp'] = current_time.isoformat()
-    if status:
-        status_data[canonical_name]["status"] = status
+    if result:
+        status_data[canonical_name]["status"] = result["status"]
+        status_data[canonical_name]["sub_status"] = result["sub_status"]
         status_data[canonical_name]["timestamp"] = current_time.isoformat()
     
     save_status(config["STATUS_FILE"], status_data, names)
     set_userbot_status("event-based", current_time.isoformat())
-    logging.info(f"✅ Updated border '{canonical_name}' with status '{status}' based on new message.")
+    logging.info(f"✅ Updated border '{canonical_name}' with status '{result}' based on new message.")
 
 async def handle_user_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.message.text:
@@ -250,11 +289,13 @@ async def handle_user_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
         msg = await search_latest_message_for_border(telethon_client, channel_entity, border_name, mapping)
         
         if msg:
-            status = parse_status_from_text(msg.text or "")
+            result = parse_status_from_text(msg.text or "")
             msg_time = msg.date.astimezone(pytz.timezone("Asia/Jerusalem"))
             
             status_data.setdefault(border_name, {})
-            status_data[border_name]["status"] = status
+            if result:
+                status_data[border_name]["status"] = result["status"]
+                status_data[border_name]["sub_status"] = result["sub_status"]
             status_data[border_name]["timestamp"] = msg_time.isoformat()
             status_data[border_name]["last_seen_message"] = msg.text or ""
             status_data[border_name]["last_seen_timestamp"] = msg_time.isoformat()
@@ -294,6 +335,7 @@ async def search_latest_message_for_border(client: TelegramClient, channel, bord
 
 async def reply_with_status(update: Update, border_name: str, status_info: dict, timestamp_str: str):
     status = status_info.get("status")
+    sub_status = status_info.get("sub_status")
     last_seen_message = status_info.get("last_seen_message")
     
     header = ""
@@ -302,9 +344,24 @@ async def reply_with_status(update: Update, border_name: str, status_info: dict,
     elif status == "🔴":
         header = f"❌ **{escape_md(border_name)}**: إغلاق! الطريق مغلق حالياً."
     elif status == "⚠️":
-        header = f"⚠️ **{escape_md(border_name)}**: في شوية تأخير. ممكن تعدي، بس بالصبر."
+        if sub_status == "traffic_stopping":
+            header = f"⚠️ **{escape_md(border_name)}**: ازمة سير خانقة. الطريق واقف تماماً."
+        elif sub_status == "traffic_high":
+            header = f"⚠️ **{escape_md(border_name)}**: ازمة سير قوية. ممكن تأخير."
+        elif sub_status == "traffic_medium":
+            header = f"⚠️ **{escape_md(border_name)}**: في شوية بطء بالسير."
+        elif sub_status == "police_presence":
+            header = f"⚠️ **{escape_md(border_name)}**: في تواجد أمني. الرجاء الحذر.\n\n`{escape_md(last_seen_message or '')}`"
+        elif sub_status == "road_event":
+            # Identify the specific event from the message
+            road_events = ["حادث", "عرقلة", "مشاة", "تجمع"]
+            event = next((e for e in road_events if e in (last_seen_message or '')), "عرقلة")
+            header = f"⚠️ **{escape_md(border_name)}**: في {event} على الطريق. الرجاء توخي الحذر."
+        else:
+            # Fallback for general caution if a sub_status is not found
+            header = f"⚠️ **{escape_md(border_name)}**: في شوية تأخير. ممكن تعدي، بس بالصبر."
     else:
-        # Corrected line: First perform the replacement, then use in the f-string.
+        # For unclear messages, just send the full message content
         cleaned_message = (last_seen_message or '').replace('`', '"')
         header = f"ℹ️ **{escape_md(border_name)}**:\n`{escape_md(cleaned_message)}`"
     
@@ -393,4 +450,3 @@ async def main():
 if __name__ == "__main__":
 
     asyncio.run(main())
-

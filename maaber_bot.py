@@ -27,19 +27,16 @@ USERBOT_STATUS_FILE = "userbot_status.json"
 MAPPING_FILE = "borders_mapping.json"
 
 
-def load_config(file_path: str = "cfg.txt") -> dict:
-    """Loads key=value lines from cfg.txt. Values can be quoted or not."""
+import os
+import json
+import logging
+
+def load_config() -> dict:
+    """Loads configuration from environment variables."""
     config = {}
-    if not os.path.exists(file_path):
-        raise FileNotFoundError(
-            f"Config file '{file_path}' missing. Create it with BOT_TOKEN, API_ID, API_HASH, SESSION_NAME, CHANNEL_LINK, STATUS_FILE"
-        )
-    with open(file_path, "r", encoding="utf-8") as f:
-        for line in f:
-            if "=" in line:
-                key, value = line.strip().split("=", 1)
-                config[key.strip()] = value.strip().strip('"')
-    required = [
+    
+    # List of required keys from environment variables
+    required_keys = [
         "BOT_TOKEN",
         "API_ID",
         "API_HASH",
@@ -47,9 +44,13 @@ def load_config(file_path: str = "cfg.txt") -> dict:
         "CHANNEL_LINK",
         "STATUS_FILE",
     ]
-    missing = [k for k in required if k not in config]
-    if missing:
-        raise KeyError(f"Missing required config keys: {', '.join(missing)}")
+
+    for key in required_keys:
+        value = os.environ.get(key)
+        if not value:
+            raise KeyError(f"Missing required environment variable: {key}")
+        config[key] = value
+
     return config
 
 
@@ -392,3 +393,4 @@ async def main():
 if __name__ == "__main__":
 
     asyncio.run(main())
+

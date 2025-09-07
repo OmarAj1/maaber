@@ -141,7 +141,7 @@ def get_best_match(text: str, mapping: dict):
 def parse_status_from_text(text: str):
     emoji_mapping = {
         "✅": "🟢", "🟢": "🟢", "✔️": "🟢", "☑️": "🟢",
-        "❌": "🔴", "❎": "🔴", "✖️": "🔴", "⛔": "🔴", "🚫": "🔴", "🛑": "🔴", "🔴": "🔴", "⚫": "🔴",
+        "❌": "🔴", "❎": "🔴", "✖️": "🔴", "⛔": "🔴", "🚫": "🔴", "🛑": "🔴", "⚫": "🔴",
         "🟡": "⚠️", "⚠️": "⚠️", "🚦": "⚠️", "🔶": "⚠️", "🚧": "⚠️", "🚓": "⚠️", "🚨": "⚠️", "👮": "⚠️", "🚶‍♂️": "⚠️",
     }
     
@@ -303,7 +303,9 @@ async def reply_with_status(update: Update, border_name: str, status_info: dict,
     elif status == "⚠️":
         header = f"⚠️ **{escape_md(border_name)}**: في شوية تأخير. ممكن تعدي، بس بالصبر."
     else:
-        header = f"ℹ️ **{escape_md(border_name)}**:\n`{escape_md((last_seen_message or '').replace('`', '\"'))}`"
+        # Corrected line: First perform the replacement, then use in the f-string.
+        cleaned_message = (last_seen_message or '').replace('`', '"')
+        header = f"ℹ️ **{escape_md(border_name)}**:\n`{escape_md(cleaned_message)}`"
     
     try:
         update_time = datetime.fromisoformat(timestamp_str)
@@ -388,4 +390,5 @@ async def main():
 
 
 if __name__ == "__main__":
+
     asyncio.run(main())

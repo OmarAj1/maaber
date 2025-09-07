@@ -225,28 +225,41 @@ async def process_message(event):
     if not text:
         return
 
-    canonical_name, matched_keyword, score = get_best_match(text, mapping)
-    if not canonical_name:
-        return
-
     current_time = get_jerusalem_time()
-    result = parse_status_from_text(text)
     
-    if canonical_name not in status_data:
-        status_data[canonical_name] = {}
-        if canonical_name not in names:
-            names.append(canonical_name)
+    # Split the message into lines
+    lines = text.splitlines()
 
-    status_data[canonical_name]['last_seen_message'] = text
-    status_data[canonical_name]['last_seen_timestamp'] = current_time.isoformat()
-    if result:
-        status_data[canonical_name]["status"] = result["status"]
-        status_data[canonical_name]["sub_status"] = result["sub_status"]
-        status_data[canonical_name]["timestamp"] = current_time.isoformat()
-    
+    for line in lines:
+        if not line.strip():
+            continue
+
+        # Find the best border match for this specific line
+        canonical_name, matched_keyword, score = get_best_match(line, mapping)
+        
+        if not canonical_name:
+            continue
+        
+        # Analyze the status of the single line
+        result = parse_status_from_text(line)
+        
+        if canonical_name not in status_data:
+            status_data[canonical_name] = {}
+            if canonical_name not in names:
+                names.append(canonical_name)
+
+        status_data[canonical_name]['last_seen_message'] = line
+        status_data[canonical_name]['last_seen_timestamp'] = current_time.isoformat()
+        if result:
+            status_data[canonical_name]["status"] = result["status"]
+            status_data[canonical_name]["sub_status"] = result["sub_status"]
+            status_data[canonical_name]["timestamp"] = current_time.isoformat()
+        
+        logging.info(f"✅ Updated border '{canonical_name}' with status '{result}' based on new message.")
+
     save_status(config["STATUS_FILE"], status_data, names)
     set_userbot_status("event-based", current_time.isoformat())
-    logging.info(f"✅ Updated border '{canonical_name}' with status '{result}' based on new message.")
+
 
 async def handle_user_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.message.text:

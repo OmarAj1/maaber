@@ -138,20 +138,23 @@ def get_best_match(text: str, mapping: dict):
         return canonical_name, matched_keyword, score
     return None, None, 0
 
-
 def parse_status_from_text(text: str):
-    emoji_mapping = {
-        "✅": "🟢", "🟢": "🟢", "✔️": "🟢", "☑️": "🟢",
+    # Prioritized emoji mapping: Red/Caution > Green
+    prioritized_emoji_mapping = {
+        # Priority 1: Red (Closed)
         "❌": "🔴", "❎": "🔴", "✖️": "🔴", "⛔": "🔴", "🚫": "🔴", "🛑": "🔴", "⚫": "🔴",
+        # Priority 2: Caution (Warning)
         "🟡": "⚠️", "⚠️": "⚠️", "🚦": "⚠️", "🔶": "⚠️", "🚧": "⚠️", "🚓": "⚠️", "🚨": "⚠️", "👮": "⚠️", "🚶‍♂️": "⚠️",
+        # Priority 3: Green (Clear)
+        "✅": "🟢", "🟢": "🟢", "✔️": "🟢", "☑️": "🟢",
     }
     
-    # Priority 1: Check for emojis
-    for emoji_char, status_val in emoji_mapping.items():
+    # Check for emojis based on new priority
+    for emoji_char, status_val in prioritized_emoji_mapping.items():
         if emoji_char in text:
             return {"status": status_val, "sub_status": None, "match": emoji_char}
     
-    # Priority 2: Fallback to keywords
+    # Fallback to keywords
     positive_keywords = ["سالك", "سالكة", "تمام", "فاتح", "مفتوح", "بدون", "بحري", "ماشية", "منسوب", "سهل", "خفيف", "لا يوجد", "سلس"]
     negative_keywords = ["مغلق", "تسكير", "اغلاق", "واقف", "وقوف"]
     
@@ -227,35 +230,40 @@ async def process_message(event):
 
     current_time = get_jerusalem_time()
     
-    # Split the message into lines
-    lines = text.splitlines()
-
-    for line in lines:
-        if not line.strip():
-            continue
-
-        # Find the best border match for this specific line
-        canonical_name, matched_keyword, score = get_best_match(line, mapping)
+    # Find all matches for all keywords in the text
+    all_matches = {}
+    for canonical_name, keywords in mapping.items():
+        for keyword in keywords:
+            for match in re.finditer(re.escape(keyword), text, re.IGNORECASE):
+                start_index = match.start()
+                end_index = match.end()
+                all_matches[start_index] = (canonical_name, keyword, end_index)
+    
+    # Process matches in the order they appear in the text
+    for index in sorted(all_matches.keys()):
+        canonical_name, matched_keyword, end_index = all_matches[index]
         
-        if not canonical_name:
-            continue
+        # Define a window to check for status indicators *only to the right*
+        window_size = 30
+        right_context = text[end_index:min(len(text), end_index + window_size)]
         
-        # Analyze the status of the single line
-        result = parse_status_from_text(line)
+        # Analyze the status in the right context
+        final_result = parse_status_from_text(right_context)
         
         if canonical_name not in status_data:
             status_data[canonical_name] = {}
             if canonical_name not in names:
                 names.append(canonical_name)
 
-        status_data[canonical_name]['last_seen_message'] = line
+        status_data[canonical_name]['last_seen_message'] = text
         status_data[canonical_name]['last_seen_timestamp'] = current_time.isoformat()
-        if result:
-            status_data[canonical_name]["status"] = result["status"]
-            status_data[canonical_name]["sub_status"] = result["sub_status"]
+        
+        if final_result:
+            status_data[canonical_name]["status"] = final_result["status"]
+            status_data[canonical_name]["sub_status"] = final_result["sub_status"]
             status_data[canonical_name]["timestamp"] = current_time.isoformat()
         
-        logging.info(f"✅ Updated border '{canonical_name}' with status '{result}' based on new message.")
+        logging.info(f"✅ Updated border '{canonical_name}' with status '{final_result}' based on new message.")
 
     save_status(config["STATUS_FILE"], status_data, names)
     set_userbot_status("event-based", current_time.isoformat())

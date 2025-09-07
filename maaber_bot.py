@@ -139,26 +139,20 @@ def get_best_match(text: str, mapping: dict):
     return None, None, 0
 
 def parse_status_from_text(text: str):
-    # Prioritized emoji mapping: Red/Caution > Green
-    prioritized_emoji_mapping = {
-        # Priority 1: Red (Closed)
-        "❌": "🔴", "❎": "🔴", "✖️": "🔴", "⛔": "🔴", "🚫": "🔴", "🛑": "🔴", "⚫": "🔴",
-        # Priority 2: Caution (Warning)
-        "🟡": "⚠️", "⚠️": "⚠️", "🚦": "⚠️", "🔶": "⚠️", "🚧": "⚠️", "🚓": "⚠️", "🚨": "⚠️", "👮": "⚠️", "🚶‍♂️": "⚠️",
-        # Priority 3: Green (Clear)
-        "✅": "🟢", "🟢": "🟢", "✔️": "🟢", "☑️": "🟢",
-    }
-    
-    # Check for emojis based on new priority
-    for emoji_char, status_val in prioritized_emoji_mapping.items():
-        if emoji_char in text:
-            return {"status": status_val, "sub_status": None, "match": emoji_char}
-    
-    # Fallback to keywords
-    positive_keywords = ["سالك", "سالكة", "تمام", "فاتح", "مفتوح", "بدون", "بحري", "ماشية", "منسوب", "سهل", "خفيف", "لا يوجد", "سلس"]
+    # Definitive closure keywords and emojis
     negative_keywords = ["مغلق", "تسكير", "اغلاق", "واقف", "وقوف"]
+    red_emojis = ["❌", "❎", "✖️", "⛔", "🚫", "🛑", "⚫"]
     
-    # New branched structure for caution keywords
+    # Check for definitive closure first
+    is_closed_by_keyword = any(kw in text for kw in negative_keywords)
+    is_closed_by_emoji = any(em in text for em in red_emojis)
+    
+    if is_closed_by_keyword and is_closed_by_emoji:
+        return {"status": "🔴", "sub_status": None, "match": "Explicit Closure"}
+    if is_closed_by_keyword and not is_closed_by_emoji:
+         return {"status": "🔴", "sub_status": None, "match": "Explicit Closure"}
+    
+    # Caution keywords and emojis
     caution_keywords = {
         "traffic_jam": {
             "stopping": ["وقوف تام"],
@@ -168,17 +162,20 @@ def parse_status_from_text(text: str):
         "police_presence": ["جيش", "شرطة", "تواجد", "تفتيش"],
         "road_event": ["حادث", "عرقلة", "مشاة", "تجمع"]
     }
-    
-    # Find best match for all keywords
-    pos_match, pos_score = find_status_keyword(text, positive_keywords)
-    neg_match, neg_score = find_status_keyword(text, negative_keywords)
-    
-    caution_match = None
+    caution_emojis = ["🟡", "⚠️", "🚦", "🔶", "🚧", "🚓", "🚨", "👮", "🚶‍♂️"]
+
+    # Check for caution status
     best_caution_score = 0
     best_sub_status = None
+    caution_match = None
     
-    # Check for branched caution keywords and get the best match
-    # Traffic
+    if is_closed_by_emoji:
+         # If there is a red emoji but not an explicit closure keyword, and there's a caution keyword
+        if any(kw in text for sub_dict in caution_keywords["traffic_jam"].values() for kw in sub_dict):
+             return {"status": "⚠️", "sub_status": "traffic_high", "match": "azma with stop"}
+
+
+    # Check for branched caution keywords
     for level, keywords in caution_keywords["traffic_jam"].items():
         match, score = find_status_keyword(text, keywords)
         if match and score > best_caution_score:
@@ -186,26 +183,31 @@ def parse_status_from_text(text: str):
             best_sub_status = f"traffic_{level}"
             caution_match = match
 
-    # Police presence
     match, score = find_status_keyword(text, caution_keywords["police_presence"])
     if match and score > best_caution_score:
         best_caution_score = score
         best_sub_status = "police_presence"
         caution_match = match
 
-    # Road event
     match, score = find_status_keyword(text, caution_keywords["road_event"])
     if match and score > best_caution_score:
         best_caution_score = score
         best_sub_status = "road_event"
         caution_match = match
+        
+    if any(em in text for em in caution_emojis):
+        return {"status": "⚠️", "sub_status": best_sub_status, "match": "caution emoji"}
 
-    if pos_match and pos_score > max(neg_score, best_caution_score):
-        return {"status": "🟢", "sub_status": None, "match": pos_match}
-    if neg_match and neg_score > max(pos_score, best_caution_score):
-        return {"status": "🔴", "sub_status": None, "match": neg_match}
     if best_sub_status:
         return {"status": "⚠️", "sub_status": best_sub_status, "match": caution_match}
+
+    # Positive keywords and emojis
+    positive_keywords = ["سالك", "سالكة", "تمام", "فاتح", "مفتوح", "بدون", "بحري", "ماشية", "منسوب", "سهل", "خفيف", "لا يوجد", "سلس"]
+    green_emojis = ["✅", "🟢", "✔️", "☑️"]
+
+    # Check for positive status
+    if any(kw in text for kw in positive_keywords) or any(em in text for em in green_emojis):
+        return {"status": "🟢", "sub_status": None, "match": "Positive"}
     
     return None
 

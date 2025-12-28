@@ -1,149 +1,120 @@
-Maaber Bot (مــعــابــر) 🚦
+# Maaber Bot (مــعــابــر) 🚦
 
-Maaber Bot is a high-performance, asynchronous Telegram bot designed to monitor and report real-time traffic and checkpoint statuses in Palestine.
+![Python](https://img.shields.io/badge/Python-3.9%2B-blue)
+![License](https://img.shields.io/badge/License-MIT-green)
+![Status](https://img.shields.io/badge/Status-Active-success)
 
-By combining a Telethon Userbot (listener) with a Python-Telegram-Bot (responder), Maaber Bot acts as a bridge: it continuously listens to a dedicated status channel, parses unstructured text updates using fuzzy logic, and serves instant, structured answers to user queries.
+**Maaber Bot** is a high-performance, asynchronous Telegram bot designed to monitor and report real-time traffic and checkpoint statuses in Palestine.
 
-🌟 Key Features
+By combining a **Telethon Userbot** (listener) with a **Python-Telegram-Bot** (responder), Maaber Bot acts as a bridge: it continuously listens to a dedicated status channel, parses unstructured text updates using fuzzy logic, and serves instant, structured answers to user queries.
 
-Hybrid Architecture: Uses Telethon to listen to channel updates in real-time and python-telegram-bot to handle user interactions concurrently.
+---
 
-Smart Status Parsing:
+## 🌟 Key Features
 
-Detects Open (🟢), Closed (🔴), and Caution (⚠️) states.
+* **Hybrid Architecture:** Uses `Telethon` to listen to channel updates in real-time and `python-telegram-bot` to handle user interactions concurrently.
+* **Smart Status Parsing:**
+    * Detects **Open** (🟢), **Closed** (🔴), and **Caution** (⚠️) states.
+    * Identifies sub-conditions like heavy traffic, police presence, or road accidents.
+    * Handles mixed signals (e.g., "Was closed, now open") using weighted precedence logic.
+* **Fuzzy Search:** Powered by `rapidfuzz` to understand user typos and colloquialisms (e.g., matching "Qalandia" with "kalandia").
+* **Optimized Performance:**
+    * **In-Memory Caching:** Serves requests instantly without disk I/O latency.
+    * **Background Persistence:** Asynchronously saves statistics and data to disk to prevent data loss without blocking the main thread.
+* **Analytics:** Tracks most frequently queried borders and logs unknown queries for future mapping improvements.
 
-Identifies sub-conditions like heavy traffic, police presence, or road accidents.
+---
 
-Handles mixed signals (e.g., "Was closed, now open") using weighted precedence logic.
+## 🛠️ Tech Stack
 
-Fuzzy Search: Powered by rapidfuzz to understand user typos and colloquialisms (e.g., matching "Qalandia" with "kalandia").
+* **Language:** Python 3.9+
+* **Core Libraries:**
+    * `python-telegram-bot` (Interaction Handler)
+    * `Telethon` (Channel Listener)
+    * `rapidfuzz` (Fuzzy String Matching)
+    * `pytz` (Timezone Handling)
 
-Optimized Performance:
+---
 
-In-Memory Caching: Serves requests instantly without disk I/O latency.
+## 🚀 Installation & Setup
 
-Background Persistence: Asynchronously saves statistics and data to disk to prevent data loss without blocking the main thread.
-
-Analytics: Tracks most frequently queried borders and logs unknown queries for future mapping improvements.
-
-🛠️ Tech Stack
-
-Language: Python 3.9+
-
-Core Libraries:
-
-python-telegram-bot (Interaction Handler)
-
-Telethon (Channel Listener)
-
-rapidfuzz (Fuzzy String Matching)
-
-pytz (Timezone Handling)
-
-🚀 Installation & Setup
-
-1. Clone the Repository
-
+### 1. Clone the Repository
+```bash
 git clone [https://github.com/yourusername/maaber-bot.git](https://github.com/yourusername/maaber-bot.git)
 cd maaber-bot
+```
 
-
-2. Install Dependencies
-
+### 2. Install Dependencies
 Ensure you have Python installed, then run:
-
+```bash
 pip install -r requirements.txt
+```
 
+### 3. Environment Configuration
+The bot relies on environment variables for security. Create a `.env` file in the root directory or configure your deployment environment (e.g., Heroku, Docker) with the following keys:
 
-3. Environment Configuration
+```env
+BOT_TOKEN=Your_Telegram_Bot_Token_From_BotFather
+API_ID=Your_Telegram_App_API_ID
+API_HASH=Your_Telegram_App_API_Hash
+SESSION_NAME=userbot_session
+CHANNEL_LINK=@ahwalaltreq
+STATUS_FILE=borders.json
+```
 
-The bot relies on environment variables for security. Create a .env file or configure your deployment environment (e.g., Heroku, Docker) with the following keys:
+### 4. Data Files
+Ensure a `borders_mapping.json` file exists in your root directory. This maps canonical border names to keywords/synonyms.
 
-Variable
-
-Description
-
-BOT_TOKEN
-
-Your Telegram Bot API Token (from @BotFather).
-
-API_ID
-
-Your Telegram App API ID (from my.telegram.org).
-
-API_HASH
-
-Your Telegram App API Hash.
-
-SESSION_NAME
-
-Name for the Telethon session file (e.g., userbot_session).
-
-CHANNEL_LINK
-
-The username or link of the channel to monitor (e.g., @ahwalaltreq).
-
-STATUS_FILE
-
-Path to the status database (e.g., borders.json).
-
-4. Data Files
-
-Ensure the following JSON files exist in your root directory (or let the bot create empty ones):
-
-borders_mapping.json: A dictionary mapping canonical border names to list of keywords/synonyms.
-
+**Example `borders_mapping.json`:**
+```json
 {
   "Qalandia": ["Qalandia", "Kalandia", "calandia"],
-  "Jericho": ["Jericho", "Ariha"]
+  "Jericho": ["Jericho", "Ariha"],
+  "DCO": ["DCO", "Mahkama", "Beit El"]
 }
+```
 
+---
 
-▶️ Usage
+## ▶️ Usage
 
 To start the bot locally:
 
+```bash
 python maaber_bot.py
+```
 
+**Upon startup, the bot will:**
+1.  Load existing data into memory.
+2.  Start the Telethon client to listen for new channel messages.
+3.  Start the Bot API poller to reply to users.
+4.  Launch a background task to save data every 60 seconds.
 
-Upon startup, the bot will:
+---
 
-Load existing data into memory.
+## 📂 File Structure
 
-Start the Telethon client to listen for new channel messages.
+* `maaber_bot.py`: The main application logic (event loop, parsers, and handlers).
+* `borders_mapping.json`: Configuration file defining synonyms for checkpoints.
+* `borders.json`: *(Generated)* Stores the current status of all checkpoints.
+* `usage_stats.json`: *(Generated)* Tracks user query statistics.
+* `unknown_queries.json`: *(Generated)* Logs unrecognized user inputs for review.
+* `requirements.txt`: Python dependency list.
 
-Start the Bot API poller to reply to users.
+---
 
-Launch a background task to save data every 60 seconds.
-
-📂 File Structure
-
-maaber_bot.py: The main application logic, containing the event loop, parsers, and handlers.
-
-borders_mapping.json: Configuration file defining synonyms for checkpoints.
-
-borders.json: (Generated) Stores the current status of all checkpoints.
-
-usage_stats.json: (Generated) Tracks user query statistics.
-
-unknown_queries.json: (Generated) Logs unrecognized user inputs for review.
-
-requirements.txt: Python dependency list.
-
-🤝 Contributing
+## 🤝 Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
 
-Fork the project.
+1.  Fork the project.
+2.  Create your feature branch (`git checkout -b feature/AmazingFeature`).
+3.  Commit your changes (`git commit -m 'Add some AmazingFeature'`).
+4.  Push to the branch (`git push origin feature/AmazingFeature`).
+5.  Open a Pull Request.
 
-Create your feature branch (git checkout -b feature/AmazingFeature).
+---
 
-Commit your changes (git commit -m 'Add some AmazingFeature').
-
-Push to the branch (git push origin feature/AmazingFeature).
-
-Open a Pull Request.
-
-⚠️ Disclaimer
+## ⚠️ Disclaimer
 
 This bot relies on parsing user-generated content from third-party Telegram channels. The accuracy of the status reports depends entirely on the source channel's accuracy and the clarity of the text messages. The developers are not responsible for decisions made based on this information.
